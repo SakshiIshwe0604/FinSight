@@ -1,145 +1,171 @@
 import os
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
-
 import streamlit as st
 from dotenv import load_dotenv
 load_dotenv()
-
 from graph.graph_builder import build_graph
 
-st.set_page_config(
-    page_title="FinSight",
-    page_icon="📈",
-    layout="centered"
-)
+st.set_page_config(page_title="FinSight", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
-.big-title { font-size: 2rem; font-weight: 600; margin-bottom: 0; }
-.sub { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; }
-.rec-buy  { background:#d4edda; color:#155724; padding:6px 16px; border-radius:6px; font-weight:600; }
-.rec-hold { background:#fff3cd; color:#856404; padding:6px 16px; border-radius:6px; font-weight:600; }
-.rec-sell { background:#f8d7da; color:#721c24; padding:6px 16px; border-radius:6px; font-weight:600; }
-.score-box { background:#f0f2f6; border-radius:8px; padding:10px 16px; font-size:0.85rem; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+html,body,[class*="css"]{font-family:'Inter',sans-serif!important;background-color:#0a0e1a!important;color:#e2e8f0!important}
+.stApp{background-color:#0a0e1a!important}
+#MainMenu,footer,header{visibility:hidden}
+.block-container{padding:2rem 4rem!important;max-width:1100px!important;margin:auto}
+.stTextInput input{background:#0f1929!important;border:1px solid #1e2d40!important;border-radius:8px!important;color:#e2e8f0!important;font-size:0.95rem!important}
+.stTextInput input:focus{border-color:#38bdf8!important;box-shadow:0 0 0 2px rgba(56,189,248,0.1)!important}
+.stTextInput label{color:#475569!important;font-size:0.75rem!important;text-transform:uppercase!important;letter-spacing:0.08em!important}
+.stButton>button{background:#38bdf8!important;color:#0a0e1a!important;border:none!important;border-radius:8px!important;font-weight:600!important;padding:0.55rem 2rem!important}
+.stButton>button:hover{background:#7dd3fc!important}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="big-title">📈 FinSight</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub">Multi-agent financial intelligence · LangGraph + RAG + Groq</p>', unsafe_allow_html=True)
+st.markdown("""
+<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:1.5rem;border-bottom:1px solid #1e2d40;margin-bottom:2rem">
+  <div>
+    <div style="font-size:1.6rem;font-weight:600;color:#38bdf8;letter-spacing:-0.5px">◈ FinSight</div>
+    <div style="font-size:0.72rem;color:#475569;margin-top:3px;font-family:'JetBrains Mono',monospace">multi-agent financial intelligence platform</div>
+  </div>
+  <div style="font-size:0.72rem;color:#22c55e;font-family:'JetBrains Mono',monospace;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);padding:6px 14px;border-radius:6px">
+    ● LIVE · LangGraph + RAG + Groq
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-# Example queries
-st.markdown("**Try an example:**")
+st.markdown('<div style="font-size:0.72rem;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem;font-family:monospace">Quick queries</div>', unsafe_allow_html=True)
+examples = ["Is Infosys a good buy?", "What are Infosys key risks?", "Infosys revenue growth", "Should I invest in Infosys?"]
 cols = st.columns(4)
-examples = [
-    "Is Infosys a good buy?",
-    "What are Infosys key risks?",
-    "Infosys revenue growth analysis",
-    "Should I invest in Infosys?"
-]
 for i, col in enumerate(cols):
-    if col.button(examples[i], key=f"ex_{i}"):
-        st.session_state["query"] = examples[i]
+    with col:
+        if st.button(examples[i], key=f"ex_{i}"):
+            st.session_state["query"] = examples[i]
 
-query = st.text_input(
-    "Ask anything about a stock:",
-    value=st.session_state.get("query", ""),
-    placeholder="e.g. Is Infosys a good investment right now?"
-)
+st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
+query = st.text_input("ASK ANYTHING ABOUT A STOCK", value=st.session_state.get("query", ""), placeholder="e.g. Is Infosys a good investment right now?")
+st.markdown("<div style='margin-top:0.75rem'></div>", unsafe_allow_html=True)
+analyze = st.button("⚡  Analyze", type="primary")
 
-if st.button("🔍 Analyze", type="primary") and query:
-    # Agent pipeline status
-    st.markdown("---")
-    st.markdown("**Agent pipeline**")
-    cols = st.columns(5)
-    statuses = ["Planner", "PDF RAG", "Live Data", "Synthesizer", "Grader"]
-    pills = []
-    for i, (col, name) in enumerate(zip(cols, statuses)):
-        pills.append(col.empty())
-        pills[i].markdown(f"⬜ {name}")
+if analyze and query:
 
-    def update_pill(idx, state):
-        icons = {"done": "✅", "running": "🔵", "wait": "⬜"}
-        pills[idx].markdown(f"{icons[state]} {statuses[idx]}")
+    nodes = ["Planner", "PDF RAG", "Live Data", "Synthesizer", "Grader"]
+    pipeline_slot = st.empty()
 
-    with st.spinner("Running analysis..."):
-        try:
-            update_pill(0, "running")
-            graph = build_graph()
+    def render_pipeline(active=None, done_list=[]):
+        def pill(label, state):
+            cfg = {
+                "wait": ("rgba(71,85,105,0.1)", "#1e2d40", "#475569", "○"),
+                "run":  ("rgba(56,189,248,0.12)", "#38bdf8", "#38bdf8", "◉"),
+                "done": ("rgba(34,197,94,0.12)", "#22c55e", "#22c55e", "●"),
+            }
+            bg, border, color, dot = cfg[state]
+            return f'<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:6px;font-size:0.78rem;font-weight:500;border:1px solid {border};background:{bg};color:{color};font-family:monospace">{dot} {label}</span>'
 
-            # Run full graph
-            update_pill(0, "done")
-            update_pill(1, "running")
+        arrow = '<span style="color:#1e2d40;margin:0 4px">→</span>'
+        html = '<div style="background:#0f1929;border:1px solid #1e2d40;border-radius:12px;padding:1.2rem 1.5rem;margin:1rem 0">'
+        html += '<div style="font-size:0.68rem;color:#475569;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem;font-family:monospace">Agent pipeline</div>'
+        html += '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">'
+        for i, n in enumerate(nodes):
+            state = "done" if n in done_list else ("run" if n == active else "wait")
+            html += pill(n, state)
+            if i < len(nodes) - 1:
+                html += arrow
+        html += '</div></div>'
+        pipeline_slot.markdown(html, unsafe_allow_html=True)
 
-            result = graph.invoke({
-                "query": query,
-                "retry_count": 0,
-                "agents_to_use": [],
-                "sub_tasks": {},
-                "pdf_answer": None,
-                "live_answer": None,
-                "final_answer": None,
-                "quality_score": None
-            })
+    render_pipeline(active="Planner", done_list=[])
 
-            update_pill(1, "done")
-            update_pill(2, "done")
-            update_pill(3, "done")
-            update_pill(4, "done")
+    try:
+        import time
+        graph = build_graph()
+        time.sleep(0.4)
+        render_pipeline(active="PDF RAG", done_list=["Planner"])
 
-        except Exception as e:
-            st.error(f"Error: {e}")
-            st.stop()
+        result = graph.invoke({
+            "query": query, "retry_count": 0,
+            "agents_to_use": [], "sub_tasks": {},
+            "pdf_answer": None, "live_answer": None,
+            "final_answer": None, "quality_score": None
+        })
 
-    # Display brief
-    st.markdown("---")
+        render_pipeline(active=None, done_list=nodes)
+
+    except Exception as e:
+        st.error(f"Error: {e}")
+        st.stop()
+
     final = result.get("final_answer", "")
     score = result.get("quality_score", 0)
-
-    # Extract and show recommendation badge
     rec = "HOLD"
-    if "RECOMMENDATION: BUY" in final:
-        rec = "BUY"
-    elif "RECOMMENDATION: SELL" in final:
-        rec = "SELL"
+    if "RECOMMENDATION: BUY" in final:  rec = "BUY"
+    elif "RECOMMENDATION: SELL" in final: rec = "SELL"
 
-    rec_class = {"BUY": "rec-buy", "HOLD": "rec-hold", "SELL": "rec-sell"}[rec]
-    st.markdown(f'<span class="{rec_class}">{rec}</span>', unsafe_allow_html=True)
-    st.markdown(" ")
-
-    # Parse and display sections
-    sections = {"OUTLOOK": "", "KEY RISKS": "", "SUMMARY": ""}
+    sections = {"OUTLOOK": [], "KEY RISKS": [], "SUMMARY": []}
     current = None
     for line in final.split("\n"):
-        if "OUTLOOK:" in line:
-            current = "OUTLOOK"
-        elif "KEY RISKS:" in line:
-            current = "KEY RISKS"
-        elif "SUMMARY:" in line:
-            current = "SUMMARY"
-        elif current and line.strip() and "RECOMMENDATION:" not in line:
-            sections[current] += line + "\n"
+        l = line.strip()
+        if not l or "RECOMMENDATION:" in l: continue
+        if "OUTLOOK:" in l:   current = "OUTLOOK";   continue
+        if "KEY RISKS:" in l: current = "KEY RISKS"; continue
+        if "SUMMARY:" in l:   current = "SUMMARY";   continue
+        if current: sections[current].append(l)
 
-    if sections["OUTLOOK"]:
-        st.markdown("**📊 Outlook**")
-        st.write(sections["OUTLOOK"].strip())
+    rec_cfg = {
+        "BUY":  ("rgba(34,197,94,0.12)",  "rgba(34,197,94,0.3)",  "#22c55e"),
+        "HOLD": ("rgba(251,191,36,0.12)", "rgba(251,191,36,0.3)", "#fbbf24"),
+        "SELL": ("rgba(239,68,68,0.12)",  "rgba(239,68,68,0.3)",  "#ef4444"),
+    }
+    rec_bg, rec_border, rec_color = rec_cfg[rec]
 
-    if sections["KEY RISKS"]:
-        st.markdown("**⚠️ Key Risks**")
-        st.write(sections["KEY RISKS"].strip())
+    outlook_text = " ".join(sections["OUTLOOK"])
+    summary_text = " ".join(sections["SUMMARY"])
+    risks_html = "".join([
+        f'<span style="display:inline-block;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#f87171;font-size:0.75rem;padding:4px 12px;border-radius:4px;margin:3px 5px 3px 0">{r.lstrip("-• ").strip()}</span>'
+        for r in sections["KEY RISKS"] if r.strip()
+    ])
 
-    if sections["SUMMARY"]:
-        st.markdown("**💡 Summary**")
-        st.info(sections["SUMMARY"].strip())
+    score_color = "#22c55e" if score >= 0.75 else "#fbbf24"
 
-    # Sources and score
-    st.markdown("---")
-    c1, c2, c3 = st.columns(3)
-    c1.markdown("**Sources:** Annual Report (RAG) · yfinance live")
-    c2.markdown(f"**Retries:** {result.get('retry_count', 1)}")
-    c3.markdown(f"**Quality score:** `{score}`")
+    st.markdown(f"""
+    <div style="background:#0f1929;border:1px solid #1e2d40;border-radius:12px;overflow:hidden;margin-top:0.5rem">
 
-    st.markdown(
-        '<div class="score-box">Traced in LangSmith · Powered by Groq llama-3.3-70b · '
-        'Embeddings: all-MiniLM-L6-v2</div>',
-        unsafe_allow_html=True
-    )
+      <div style="background:#0d1624;padding:1.25rem 1.5rem;border-bottom:1px solid #1e2d40;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <span style="font-size:1.2rem;font-weight:600;color:#f1f5f9;font-family:monospace">Investment Brief</span>
+          <span style="font-size:0.75rem;color:#475569;margin-left:12px;font-family:monospace">powered by LangGraph</span>
+        </div>
+        <span style="background:{rec_bg};border:1px solid {rec_border};color:{rec_color};padding:6px 20px;border-radius:6px;font-weight:600;font-size:0.88rem;font-family:monospace">{rec}</span>
+      </div>
+
+      <div style="padding:1.5rem">
+
+        <div style="margin-bottom:1.25rem">
+          <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● Outlook</div>
+          <div style="font-size:0.9rem;color:#94a3b8;line-height:1.75">{outlook_text}</div>
+        </div>
+
+        <div style="margin-bottom:1.25rem">
+          <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● Key risks</div>
+          <div>{risks_html}</div>
+        </div>
+
+        <div>
+          <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● Summary</div>
+          <div style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:0.9rem 1.1rem;font-size:0.88rem;color:#7dd3fc;line-height:1.7">{summary_text}</div>
+        </div>
+
+      </div>
+
+      <div style="padding:0.9rem 1.5rem;border-top:1px solid #1e2d40;background:#0d1624;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:0.72rem;color:#475569;font-family:monospace">
+          SOURCES: Annual Report (RAG) · yfinance live · RETRIES: {result.get('retry_count',1)}
+        </div>
+        <div style="font-size:0.72rem;font-family:monospace">
+          <span style="color:#475569">RAGAS SCORE </span>
+          <span style="color:{score_color};font-weight:600">{score}</span>
+        </div>
+      </div>
+
+    </div>
+    """, unsafe_allow_html=True)
