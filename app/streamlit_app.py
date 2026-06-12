@@ -4,6 +4,8 @@ import streamlit as st
 from dotenv import load_dotenv
 load_dotenv()
 from graph.graph_builder import build_graph
+import html as html_lib
+
 
 st.set_page_config(page_title="FinSight", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
 
@@ -94,8 +96,8 @@ if analyze and query:
     except Exception as e:
         st.error(f"Error: {e}")
         st.stop()
-
     final = result.get("final_answer", "")
+     
     score = result.get("quality_score", 0)
     rec = "HOLD"
     if "RECOMMENDATION: BUY" in final:  rec = "BUY"
@@ -106,9 +108,21 @@ if analyze and query:
     for line in final.split("\n"):
         l = line.strip()
         if not l or "RECOMMENDATION:" in l: continue
-        if "OUTLOOK:" in l:   current = "OUTLOOK";   continue
-        if "KEY RISKS:" in l: current = "KEY RISKS"; continue
-        if "SUMMARY:" in l:   current = "SUMMARY";   continue
+        if l.startswith("OUTLOOK:"):
+            current = "OUTLOOK"
+            rest = l.split("OUTLOOK:", 1)[1].strip()
+            if rest: sections[current].append(rest)
+            continue
+        if l.startswith("KEY RISKS:"):
+            current = "KEY RISKS"
+            rest = l.split("KEY RISKS:", 1)[1].strip()
+            if rest: sections[current].append(rest)
+            continue
+        if l.startswith("SUMMARY:"):
+            current = "SUMMARY"
+            rest = l.split("SUMMARY:", 1)[1].strip()
+            if rest: sections[current].append(rest)
+            continue
         if current: sections[current].append(l)
 
     rec_cfg = {
@@ -118,54 +132,37 @@ if analyze and query:
     }
     rec_bg, rec_border, rec_color = rec_cfg[rec]
 
-    outlook_text = " ".join(sections["OUTLOOK"])
-    summary_text = " ".join(sections["SUMMARY"])
+    import html as html_lib
+
+    outlook_text = html_lib.escape(" ".join(sections["OUTLOOK"]))
+    summary_text = html_lib.escape(" ".join(sections["SUMMARY"]))
     risks_html = "".join([
-        f'<span style="display:inline-block;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#f87171;font-size:0.75rem;padding:4px 12px;border-radius:4px;margin:3px 5px 3px 0">{r.lstrip("-• ").strip()}</span>'
+        f'<span style="display:inline-block;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#f87171;font-size:0.75rem;padding:4px 12px;border-radius:4px;margin:3px 5px 3px 0">{html_lib.escape(r.lstrip("-• ").strip())}</span>'
         for r in sections["KEY RISKS"] if r.strip()
     ])
 
     score_color = "#22c55e" if score >= 0.75 else "#fbbf24"
 
-    st.markdown(f"""
-    <div style="background:#0f1929;border:1px solid #1e2d40;border-radius:12px;overflow:hidden;margin-top:0.5rem">
+    # Header
+    st.markdown(f"""<div style="background:#0f1929;border:1px solid #1e2d40;border-radius:12px 12px 0 0;overflow:hidden;margin-top:0.5rem;background:#0d1624;padding:1.25rem 1.5rem;border-bottom:1px solid #1e2d40;display:flex;justify-content:space-between;align-items:center"><div><span style="font-size:1.2rem;font-weight:600;color:#f1f5f9;font-family:monospace">Investment Brief</span><span style="font-size:0.75rem;color:#475569;margin-left:12px;font-family:monospace">powered by LangGraph</span></div><span style="background:{rec_bg};border:1px solid {rec_border};color:{rec_color};padding:6px 20px;border-radius:6px;font-weight:600;font-size:0.88rem;font-family:monospace">{rec}</span></div>""", unsafe_allow_html=True)
 
-      <div style="background:#0d1624;padding:1.25rem 1.5rem;border-bottom:1px solid #1e2d40;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <span style="font-size:1.2rem;font-weight:600;color:#f1f5f9;font-family:monospace">Investment Brief</span>
-          <span style="font-size:0.75rem;color:#475569;margin-left:12px;font-family:monospace">powered by LangGraph</span>
-        </div>
-        <span style="background:{rec_bg};border:1px solid {rec_border};color:{rec_color};padding:6px 20px;border-radius:6px;font-weight:600;font-size:0.88rem;font-family:monospace">{rec}</span>
-      </div>
+    # Body wrapper start
+    st.markdown('<div style="background:#0f1929;border:1px solid #1e2d40;border-top:none;padding:1.5rem">', unsafe_allow_html=True)
 
-      <div style="padding:1.5rem">
+    # Outlook
+    st.markdown('<div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● OUTLOOK</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:0.9rem;color:#94a3b8;line-height:1.75;margin-bottom:1.25rem">{outlook_text}</div>', unsafe_allow_html=True)
 
-        <div style="margin-bottom:1.25rem">
-          <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● Outlook</div>
-          <div style="font-size:0.9rem;color:#94a3b8;line-height:1.75">{outlook_text}</div>
-        </div>
+    # Key Risks
+    st.markdown('<div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● KEY RISKS</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="margin-bottom:1.25rem">{risks_html}</div>', unsafe_allow_html=True)
 
-        <div style="margin-bottom:1.25rem">
-          <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● Key risks</div>
-          <div>{risks_html}</div>
-        </div>
+    # Summary
+    st.markdown('<div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● SUMMARY</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:0.9rem 1.1rem;font-size:0.88rem;color:#7dd3fc;line-height:1.7">{summary_text}</div>', unsafe_allow_html=True)
 
-        <div>
-          <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">● Summary</div>
-          <div style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:0.9rem 1.1rem;font-size:0.88rem;color:#7dd3fc;line-height:1.7">{summary_text}</div>
-        </div>
+    # Body wrapper end
+    st.markdown('</div>', unsafe_allow_html=True)
 
-      </div>
-
-      <div style="padding:0.9rem 1.5rem;border-top:1px solid #1e2d40;background:#0d1624;display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:0.72rem;color:#475569;font-family:monospace">
-          SOURCES: Annual Report (RAG) · yfinance live · RETRIES: {result.get('retry_count',1)}
-        </div>
-        <div style="font-size:0.72rem;font-family:monospace">
-          <span style="color:#475569">RAGAS SCORE </span>
-          <span style="color:{score_color};font-weight:600">{score}</span>
-        </div>
-      </div>
-
-    </div>
-    """, unsafe_allow_html=True)
+    # Footer
+    st.markdown(f"""<div style="padding:0.9rem 1.5rem;border:1px solid #1e2d40;border-top:none;border-radius:0 0 12px 12px;background:#0d1624;display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.72rem;color:#475569;font-family:monospace">SOURCES: Annual Report (RAG) · yfinance live · RETRIES: {result.get('retry_count',1)}</div><div style="font-size:0.72rem;font-family:monospace"><span style="color:#475569">RAGAS SCORE </span><span style="color:{score_color};font-weight:600">{score}</span></div></div>""", unsafe_allow_html=True)
