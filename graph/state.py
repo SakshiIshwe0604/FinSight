@@ -9,4 +9,9 @@ class AgentState(TypedDict):
     final_answer: Optional[str]
     quality_score: Optional[float]
     retry_count: int
-
+    # ── new compare fields ──
+    is_compare: Optional[bool]
+    company1: Optional[str]
+    company2: Optional[str]
+    pdf_answer_2: Optional[str]
+    live_answer_2: Optional[str]

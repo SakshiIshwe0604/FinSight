@@ -1,0 +1,50 @@
+✅ What's already strong:
+
+Multi-agent architecture with LangGraph
+RAG pipeline with FAISS
+Live data integration
+RAGAS evaluation
+Clean deployed UI
+
+
+🔴 High impact additions (do these first):
+1. Add more company PDFs
+
+Right now only Infosys is there. Add TCS, Wipro, Reliance, HDFC — recruiters will test with multiple companies. You already planned this.
+bash# just drop PDFs in data/pdfs/ and rebuild index
+python3 -m rag.ingest_pdfs
+2. Add a compare stocks feature
+"Compare Infosys vs TCS"
+This makes the project 10x more impressive — shows multi-document RAG capability.
+3. Better error handling
+
+Right now if a company isn't in the PDF index it might crash. Add a graceful fallback message:
+"Annual report not available for this company — 
+analyzing using live data only"
+
+🟡 Medium impact (good to have):
+4. Conversation history
+
+Let users ask follow-up questions:
+User: "What are Infosys key risks?"
+User: "How does that compare to last year?"  ← needs memory
+Add st.session_state for chat history.
+5. Export to PDF
+
+Add a "Download Report" button that exports the Investment Brief as a PDF. Very impressive for fintech roles.
+6. Stock price chart
+
+Show a simple price chart using yfinance + plotly — visual element makes demos much more impressive.
+
+🟢 Bonus (if time permits):
+7. Add Nifty 50 stock selector
+
+Instead of typing company names, show a dropdown of top 20 Indian stocks — makes it more user friendly.
+8. README on GitHub
+
+Add a proper README with:
+
+Demo GIF/screenshot
+Architecture diagram
+Tech stack badges
+How to run locally
