@@ -174,61 +174,76 @@ if analyze and query:
     # Footer
     st.markdown(f"""<div style="padding:0.9rem 1.5rem;border:1px solid #1e2d40;border-top:none;border-radius:0 0 12px 12px;background:#0d1624;display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.72rem;color:#475569;font-family:monospace">SOURCES: Annual Report (RAG) · yfinance live · RETRIES: {result.get('retry_count',1)}</div><div style="font-size:0.72rem;font-family:monospace"><span style="color:#475569">RAGAS SCORE </span><span style="color:{score_color};font-weight:600">{score}</span></div></div>""", unsafe_allow_html=True)
 
-      # ── Compare mode rendering ────────────────────────────────────
+     # ── Compare Mode Rendering ───────────────────────────────
     if result.get("is_compare"):
-      company1 = result.get("company1", "Company 1")
-      company2 = result.get("company2", "Company 2")
+        company1 = result.get("company1", "Company 1")
+        company2 = result.get("company2", "Company 2")
 
-    # parse winner
-      winner = ""
-    for line in final.split("\n"):
-        if line.strip().startswith("WINNER:"):
-            winner = line.split("WINNER:", 1)[1].strip()
-            break
+        # pre-compute to avoid f-string nesting issues
+        c1_header = company1.upper() + " OUTLOOK:"
+        c2_header = company2.upper() + " OUTLOOK:"
 
-    # parse sections
-    c1_outlook, c2_outlook, differences = [], [], []
-    current = None
-    for line in final.split("\n"):
-        l = line.strip()
-        if not l or "RECOMMENDATION:" in l or "WINNER:" in l:
-            continue
-        if f"{company1.upper()} OUTLOOK:" in l:
-            current = "c1"
-            continue
-        if f"{company2.upper()} OUTLOOK:" in l:
-            current = "c2"
-            continue
-        if "KEY DIFFERENCES:" in l:
-            current = "diff"
-            continue
-        if current == "c1":
-            c1_outlook.append(l)
-        elif current == "c2":
-            c2_outlook.append(l)
-        elif current == "diff":
-            differences.append(l)
+        # parse winner
+        winner = ""
+        for line in final.split("\n"):
+            if line.strip().startswith("WINNER:"):
+                winner = line.split("WINNER:", 1)[1].strip()
+                break
 
-    st.markdown(f"""
-    <div style="background:#0f1929;border:1px solid #1e2d40;border-radius:12px;padding:1.5rem;margin-top:1rem">
-        <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem;font-family:monospace">
-            ◈ COMPARISON: {company1} vs {company2}
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
-            <div style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:1rem">
-                <div style="font-size:0.75rem;font-weight:600;color:#38bdf8;margin-bottom:0.5rem;font-family:monospace">{company1}</div>
-                <div style="font-size:0.85rem;color:#94a3b8;line-height:1.7">{" ".join(c1_outlook)}</div>
+        # parse sections
+        c1_outlook, c2_outlook, differences = [], [], []
+        current = None
+        for line in final.split("\n"):
+            l = line.strip()
+            if not l or "RECOMMENDATION:" in l or "WINNER:" in l:
+                continue
+            if c1_header in l:          # ← fixed
+                current = "c1"
+                continue
+            if c2_header in l:          # ← fixed
+                current = "c2"
+                continue
+            if "KEY DIFFERENCES:" in l:
+                current = "diff"
+                continue
+            if current == "c1":
+                c1_outlook.append(l)
+            elif current == "c2":
+                c2_outlook.append(l)
+            elif current == "diff":
+                differences.append(l)
+
+        diff_pills = "".join([
+            f'<span style="display:inline-block;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);color:#7dd3fc;font-size:0.75rem;padding:4px 12px;border-radius:4px;margin:3px 5px 3px 0">{html_lib.escape(d.lstrip("-• ").strip())}</span>'
+            for d in differences if d.strip()
+        ])
+
+        c1_text = html_lib.escape(" ".join(c1_outlook))
+        c2_text = html_lib.escape(" ".join(c2_outlook))
+        c1_name = html_lib.escape(company1)
+        c2_name = html_lib.escape(company2)
+        winner_text = html_lib.escape(winner)
+
+        st.markdown(f"""
+        <div style="background:#0f1929;border:1px solid #1e2d40;border-radius:12px;padding:1.5rem;margin-top:1rem">
+            <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem;font-family:monospace">
+                ◈ COMPARISON: {c1_name} vs {c2_name}
             </div>
-            <div style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.15);border-radius:8px;padding:1rem">
-                <div style="font-size:0.75rem;font-weight:600;color:#a855f7;margin-bottom:0.5rem;font-family:monospace">{company2}</div>
-                <div style="font-size:0.85rem;color:#94a3b8;line-height:1.7">{" ".join(c2_outlook)}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+                <div style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:1rem">
+                    <div style="font-size:0.75rem;font-weight:600;color:#38bdf8;margin-bottom:0.5rem;font-family:monospace">{c1_name}</div>
+                    <div style="font-size:0.85rem;color:#94a3b8;line-height:1.7">{c1_text}</div>
+                </div>
+                <div style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.15);border-radius:8px;padding:1rem">
+                    <div style="font-size:0.75rem;font-weight:600;color:#a855f7;margin-bottom:0.5rem;font-family:monospace">{c2_name}</div>
+                    <div style="font-size:0.85rem;color:#94a3b8;line-height:1.7">{c2_text}</div>
+                </div>
+            </div>
+            <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">KEY DIFFERENCES</div>
+            <div style="margin-bottom:1rem">{diff_pills}</div>
+            <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:0.9rem 1.1rem">
+                <span style="font-size:0.72rem;color:#475569;font-family:monospace">WINNER: </span>
+                <span style="font-size:0.9rem;color:#22c55e;font-weight:600">{winner_text}</span>
             </div>
         </div>
-        <div style="font-size:0.68rem;color:#38bdf8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;font-family:monospace">KEY DIFFERENCES</div>
-        <div style="margin-bottom:1rem">{"".join([f'<span style="display:inline-block;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);color:#7dd3fc;font-size:0.75rem;padding:4px 12px;border-radius:4px;margin:3px 5px 3px 0">{d.lstrip("-• ").strip()}</span>' for d in differences if d.strip()])}</div>
-        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:0.9rem 1.1rem">
-            <span style="font-size:0.72rem;color:#475569;font-family:monospace">WINNER: </span>
-            <span style="font-size:0.9rem;color:#22c55e;font-weight:600">{winner}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
