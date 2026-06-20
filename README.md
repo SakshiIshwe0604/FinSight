@@ -1,74 +1,109 @@
 # 📈 FinSight — Multi-Agent Financial Intelligence Platform
 
-> Built with LangGraph · LangChain RAG · Groq · LangSmith · Streamlit
+> Built with LangGraph · LangChain RAG · Groq · Streamlit
 
-FinSight is a multi-agent AI system that answers financial questions about Indian stocks by combining live market data with deep analysis of company annual reports — orchestrated via a LangGraph pipeline and traced end-to-end in LangSmith.
+FinSight is a multi-agent AI system that answers financial questions about Indian stocks by combining live market data with deep analysis of company annual reports — orchestrated via a LangGraph pipeline.
+
+**🔗 Live demo:** [ishwefinsight.streamlit.app](https://ishwefinsight.streamlit.app)
 
 ---
 
 ## 🎯 What it does
 
-Type a question like *"Is Infosys a good investment right now?"* and FinSight:
+Type a question like *"Is Infosys a good investment right now?"* or *"Compare Infosys vs TCS"* and FinSight:
 
-1. **Plans** — decides which agents to invoke based on your query
-2. **Retrieves** — searches 1667 chunks from annual report PDFs using semantic RAG
-3. **Fetches** — pulls live stock price, P/E ratio, EPS, 52-week range, and news from yfinance
+1. **Plans** — decides which agents to invoke based on your query, and detects compare-style questions
+2. **Retrieves** — searches 7,300+ chunks from annual report PDFs (1,710+ pages) using semantic RAG
+3. **Fetches** — pulls live stock price, P/E ratio, EPS, 52-week range, market cap, and news from yfinance
 4. **Synthesizes** — merges both sources into a structured investment brief
 5. **Grades** — scores answer quality and retries automatically if below threshold
 
-Output: a structured brief with **BUY / HOLD / SELL** recommendation, Outlook, Key Risks, and Summary.
+Output: a structured brief with **BUY / HOLD / SELL** recommendation, Outlook, Key Risks, and Summary — or an honest **NO DATA** response when a company is outside FinSight's coverage, instead of a fabricated answer.
+
+---
+
+## 🏢 Company Coverage
+
+FinSight distinguishes between two coverage tiers, and is explicit about the difference rather than silently guessing:
+
+| Coverage | Companies |
+|---|---|
+| **Live data + Annual report (full analysis)** | Infosys, TCS, Wipro, HDFC Bank, Reliance |
+| **Live data only** | ICICI Bank, SBI, Bajaj Finance, Asian Paints |
+| **Out of scope** | Anything else (e.g. Meesho, Zomato) — returns an explicit "not covered" response |
+
+This was a deliberate design decision after an early version of the system silently fell back to Infosys's data when asked about an untracked company — see [Design Notes](#-design-notes--lessons-learned) below.
 
 ---
 
 ## 🏗️ Architecture
-User Query
-↓
-[Planner Node] — routes to pdf_rag, live_data, or both
-↓
-[PDF RAG Agent]          [Live Data Agent]
-FAISS + HuggingFace      yfinance → Groq
-↓                         ↓
-[Synthesizer Node]
-Merges both answers
-↓
-[Grader Node]
-Scores quality (0–1)
-Retries if score < 0.75
-↓
-Final Investment Brief
 
-All nodes traced in **LangSmith** with full observability.
+```
+                          User Query
+                              │
+                              ▼
+                      ┌───────────────┐
+                      │  Planner Node │  routes to pdf_rag, live_data,
+                      │               │  both, or compare mode
+                      └───────┬───────┘
+                 ┌────────────┼────────────┐
+                 ▼                         ▼
+        ┌─────────────────┐      ┌──────────────────┐
+        │  PDF RAG Agent   │      │  Live Data Agent  │
+        │  FAISS + HF      │      │  yfinance + Groq  │
+        │  embeddings      │      │                   │
+        └────────┬─────────┘      └─────────┬─────────┘
+                 └────────────┬─────────────┘
+                              ▼
+                     ┌─────────────────┐
+                     │ Synthesizer Node │  merges both answers,
+                     │                  │  or returns honest "NO DATA"
+                     └────────┬─────────┘  if neither source has coverage
+                              ▼
+                     ┌─────────────────┐
+                     │   Grader Node    │  scores quality (0–1)
+                     │                  │  retries if score < threshold
+                     └────────┬─────────┘
+                              ▼
+                  Final Investment Brief
+                  (BUY / HOLD / SELL / NO DATA)
+```
+
+For comparison queries (*"Compare TCS vs Wipro"*), the Planner routes directly to a dedicated **Compare Node** that retrieves context for both companies and generates a side-by-side brief with a declared winner.
 
 ---
 
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
+|---|---|
 | Orchestration | LangGraph |
 | RAG Pipeline | LangChain + FAISS |
 | Embeddings | HuggingFace `all-MiniLM-L6-v2` |
-| LLM (Planner + Synthesizer) | Groq `llama-3.3-70b-versatile` |
-| LLM (RAG Agents) | Groq `llama-3.1-8b-instant` |
+| LLM (Planner + Synthesizer + Compare) | Groq `llama-3.3-70b-versatile` |
+| LLM (RAG + Live Data Agents) | Groq `llama-3.1-8b-instant` |
 | Live Market Data | yfinance |
-| Observability | LangSmith |
 | Evaluation | RAGAS |
 | UI | Streamlit |
 
 ---
 
 ## 📁 Project Structure
+
+```
 finsight/
 ├── app/
 │   └── streamlit_app.py        # Streamlit UI
 ├── graph/
 │   ├── state.py                # AgentState TypedDict
-│   ├── graph_builder.py        # LangGraph pipeline
+│   ├── graph_builder.py        # LangGraph pipeline definition
+│   ├── companies.py            # Shared ticker map + coverage lists
 │   └── nodes/
-│       ├── planner.py          # Query router
+│       ├── planner.py          # Query router + compare detection
 │       ├── pdf_rag_agent.py    # Annual report retriever
 │       ├── live_data_agent.py  # yfinance live data
-│       ├── synthesizer.py      # Answer merger
+│       ├── compare_node.py     # Side-by-side comparison logic
+│       ├── synthesizer.py      # Answer merger + no-data handling
 │       └── grader.py           # Quality scorer + retry
 ├── rag/
 │   ├── embeddings.py           # HuggingFace embeddings setup
@@ -77,7 +112,9 @@ finsight/
 │   ├── ragas_eval.py           # RAGAS evaluation pipeline
 │   └── test_questions.json     # Benchmark questions
 └── data/
-└── pdfs/                   # Annual report PDFs (not committed)
+    ├── pdfs/                   # Annual report PDFs (not committed)
+    └── faiss_index/            # Built vector index (committed)
+```
 
 ---
 
@@ -104,24 +141,22 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 ```
-Fill in your API keys:
+Fill in your API key:
+```
 GROQ_API_KEY=your_groq_key
-LANGCHAIN_API_KEY=your_langsmith_key
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_PROJECT=finsight
-LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+```
 
 ### 5. Add annual report PDFs
-Download annual reports (Infosys, TCS, Wipro) from their investor pages and place them in `data/pdfs/`.
+Download annual reports for Infosys, TCS, Wipro, HDFC Bank, and Reliance from their investor relations pages and place them in `data/pdfs/`.
 
-### 6. Build FAISS index
+### 6. Build the FAISS index
 ```bash
 python -m rag.ingest_pdfs
 ```
 
 ### 7. Run the app
 ```bash
-python -m streamlit run app/streamlit_app.py
+streamlit run app/streamlit_app.py
 ```
 
 Open `http://localhost:8501` in your browser.
@@ -130,39 +165,52 @@ Open `http://localhost:8501` in your browser.
 
 ## 💡 Example Queries
 
+**Investment analysis**
 - *"Is Infosys a good buy right now?"*
-- *"What are the key risks in Infosys annual report?"*
-- *"Infosys revenue growth analysis"*
-- *"Should I invest in TCS or Wipro?"*
+- *"What are the key risks for TCS?"*
+- *"What is Reliance market cap?"*
+
+**Comparison**
+- *"Compare Infosys vs TCS"*
+- *"Which is better, Wipro or HDFC?"*
+
+**Live data only**
+- *"What is ICICI Bank current price?"*
+- *"What is SBI P/E ratio?"*
 
 ---
 
 ## 📊 Evaluation
 
-The system is evaluated using **RAGAS** metrics:
-
-| Metric | Score |
-|--------|-------|
-| Faithfulness | 0.87 |
-| Answer Relevancy | 0.84 |
-
-All agent traces visible in LangSmith dashboard.
+The system is evaluated using **RAGAS** metrics on the synthesized investment briefs, with scores surfaced live in the UI for every query (currently averaging **~0.8**). The Grader node uses this score to automatically trigger a retry through the pipeline if quality falls below threshold.
 
 ---
 
-## 🔑 Free API Keys Required
+## 🔍 Design Notes & Lessons Learned
+
+An early version of FinSight had a silent fallback: if a query mentioned a company not in the ticker map, `extract_ticker()` defaulted to Infosys's ticker instead of failing explicitly. This meant asking *"What is Meesho's market cap?"* returned a confident, well-formatted investment brief — using Infosys's real financial data, with Infosys's numbers, while never mentioning that the company being analyzed wasn't actually Meesho.
+
+The fix involved three changes:
+- Removing the silent fallback so an unmapped ticker returns `None` instead of a default
+- Adding the same explicit "not covered" guard to the PDF RAG agent, since FAISS will always return its *nearest* chunks even when no genuinely relevant document exists in the index
+- Updating the Synthesizer to recognize when both the PDF and live-data agents report no coverage, and return an honest `NO DATA` recommendation instead of asking the LLM to force a BUY/HOLD/SELL verdict from nothing
+
+This is a good illustration of a general failure mode in RAG and agent systems: retrieval and LLM generation will always produce *something* plausible-looking, even with no relevant grounding data, unless the pipeline explicitly checks for and short-circuits the no-data case.
+
+---
+
+## 🔑 Free API Key Required
 
 | Service | Link | Cost |
-|---------|------|------|
+|---|---|---|
 | Groq | [console.groq.com](https://console.groq.com) | Free |
-| LangSmith | [smith.langchain.com](https://smith.langchain.com) | Free |
 
 ---
 
 ## 👩‍💻 Author
 
-**Sakshi Ishwe**  
-B.Tech CSE — Shri Vaishnav Vidyapeeth Vishwavidyalaya  
+**Sakshi Ishwe**
+B.Tech CSE — Shri Vaishnav Vidyapeeth Vishwavidyalaya, Indore
 [GitHub](https://github.com/SakshiIshwe0604) · [LinkedIn](https://linkedin.com/in/your-linkedin)
 
 ---
