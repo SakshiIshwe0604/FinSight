@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
+from graph.companies import KNOWN_COMPANIES
 
 load_dotenv()
 
@@ -24,11 +25,11 @@ For single agent, still use array: {{"agents": ["live"], "sub_tasks": {{"live": 
 def planner_node(state: dict) -> dict:
     print(f"\n[Planner] Routing query: {state['query']}")
 
-    # ── detect compare query ──────────────────────────────────
     query_lower = state["query"].lower()
-    compare_keywords = ["vs", "versus", "compare", "better", "which is better"]
-    companies = ["infosys", "tcs", "wipro", "hdfc", "reliance", "ril"]
 
+    # ── detect compare query (existing) ───────────────────────
+    compare_keywords = ["vs", "versus", "compare", "better", "which is better"]
+    companies = list(KNOWN_COMPANIES.keys())
     is_compare = any(kw in query_lower for kw in compare_keywords)
     found_companies = [c for c in companies if c in query_lower]
 
@@ -44,7 +45,11 @@ def planner_node(state: dict) -> dict:
             "retry_count": state.get("retry_count", 0)
         }
 
-    # ── normal routing ────────────────────────────────────────
+    # ── deterministic override for live-data keywords ─────────
+    live_keywords = ["market cap", "current price", "stock price", "p/e ratio",
+                      "pe ratio", "52-week", "52 week", "today", "live", "eps"]
+    force_live = any(kw in query_lower for kw in live_keywords)
+
     chain = PLANNER_PROMPT | llm
     result = chain.invoke({"query": state["query"]})
 
@@ -53,6 +58,8 @@ def planner_node(state: dict) -> dict:
         agents = plan["agents"]
         if agents == "both" or agents == ["both"]:
             agents = ["pdf", "live"]
+        if force_live and "live" not in agents:
+            agents.append("live")
         plan["agents"] = agents
         if "pdf" in agents and "pdf" not in plan.get("sub_tasks", {}):
             plan["sub_tasks"]["pdf"] = state["query"]

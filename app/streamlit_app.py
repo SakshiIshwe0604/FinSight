@@ -109,6 +109,7 @@ if analyze and query:
     rec = "HOLD"
     if "RECOMMENDATION: BUY" in final:  rec = "BUY"
     elif "RECOMMENDATION: SELL" in final: rec = "SELL"
+    elif "RECOMMENDATION: NO DATA" in final: rec = "NO DATA"
 
     sections = {"OUTLOOK": [], "KEY RISKS": [], "SUMMARY": []}
     current = None
@@ -136,6 +137,7 @@ if analyze and query:
         "BUY":  ("rgba(34,197,94,0.12)",  "rgba(34,197,94,0.3)",  "#22c55e"),
         "HOLD": ("rgba(251,191,36,0.12)", "rgba(251,191,36,0.3)", "#fbbf24"),
         "SELL": ("rgba(239,68,68,0.12)",  "rgba(239,68,68,0.3)",  "#ef4444"),
+        "NO DATA": ("rgba(100,116,139,0.12)", "rgba(100,116,139,0.3)", "#64748b"),
     }
     rec_bg, rec_border, rec_color = rec_cfg[rec]
 

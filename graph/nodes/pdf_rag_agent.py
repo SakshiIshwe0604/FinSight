@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from rag.ingest_pdfs import load_index
+from graph.companies import is_pdf_covered
 
 load_dotenv()
 
@@ -23,6 +24,14 @@ def pdf_rag_node(state: dict) -> dict:
 
     question = state["sub_tasks"].get("pdf", state["query"])
     print(f"\n[PDF RAG] Question: {question}")
+
+    if not is_pdf_covered(state["query"]):
+        answer = (
+            "No annual report is indexed for this company. FinSight currently "
+            "has annual report data for: Infosys, TCS, Wipro, HDFC Bank, and Reliance."
+        )
+        print(f"[PDF RAG] Company not in indexed PDFs — returning explicit no-data message")
+        return {**state, "pdf_answer": answer}
 
     retriever = load_index().as_retriever(search_kwargs={"k": 4})
     docs = retriever.invoke(question)

@@ -8,11 +8,38 @@ llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
 def synthesizer_node(state: dict) -> dict:
     print(f"\n[Synthesizer] Merging agent answers...")
 
+    pdf_answer = state.get("pdf_answer", "") or ""
+    live_answer = state.get("live_answer", "") or ""
+
+    no_data_markers = [
+        "not in finsight's tracked universe",
+        "no annual report is indexed"
+    ]
+    pdf_has_no_data = any(m in pdf_answer.lower() for m in no_data_markers)
+    live_has_no_data = any(m in live_answer.lower() for m in no_data_markers)
+
+    # if BOTH sources have no data, don't synthesize a fake verdict
+    if pdf_has_no_data and live_has_no_data:
+        final = (
+            "RECOMMENDATION: NO DATA\n\n"
+            "OUTLOOK:\n"
+            "This company is outside FinSight's current coverage. "
+            "FinSight tracks live data for Infosys, TCS, Wipro, HDFC Bank, Reliance, "
+            "ICICI Bank, SBI, Bajaj Finance, and Asian Paints, with annual report "
+            "analysis available for Infosys, TCS, Wipro, HDFC Bank, and Reliance.\n\n"
+            "KEY RISKS:\n"
+            "- No assessment possible without source data\n\n"
+            "SUMMARY:\n"
+            "No recommendation can be made — this company is not yet covered by FinSight."
+        )
+        print(f"[Synthesizer] No data from either source — skipping LLM synthesis")
+        return {**state, "final_answer": final}
+
     parts = []
-    if state.get("pdf_answer"):
-        parts.append(f"[From Annual Report]:\n{state['pdf_answer']}")
-    if state.get("live_answer"):
-        parts.append(f"[From Live Market Data]:\n{state['live_answer']}")
+    if pdf_answer and not pdf_has_no_data:
+        parts.append(f"[From Annual Report]:\n{pdf_answer}")
+    if live_answer and not live_has_no_data:
+        parts.append(f"[From Live Market Data]:\n{live_answer}")
 
     if not parts:
         return {**state, "final_answer": "No data available to generate a brief."}

@@ -48,3 +48,53 @@ Demo GIF/screenshot
 Architecture diagram
 Tech stack badges
 How to run locally
+
+
+
+
+
+
+
+test :
+1. Fully out-of-scope companies (should return "NO DATA" / gray badge, no fabricated verdict)
+
+"What is Meesho market cap?"
+"What are Zomato key risks?"
+"Is Paytm a good buy?"
+"Compare Swiggy vs Meesho"
+
+2. Live-tracked but no PDF indexed (should use live data only, no fake annual report content)
+
+"What is ICICI Bank current price?"
+"What is SBI P/E ratio?"
+"Is Bajaj Finance a good buy?"
+"What is Asian Paints market cap?"
+
+3. Fully covered companies — live + PDF (should give a real, grounded BUY/HOLD/SELL)
+
+"Is Infosys a good buy?"
+"What is TCS market cap?"
+"What are Wipro key risks?"
+"What is HDFC Bank net profit FY2025?"
+"What is Reliance market cap?" (the one that was originally broken)
+
+4. Live-data keyword routing (confirms your force_live fix works across all 5 main companies, not just Reliance)
+
+"What is TCS current price?"
+"What is Infosys P/E ratio?"
+"What is Wipro 52-week high?"
+"What is HDFC Bank 52-week low?"
+
+5. Compare feature (confirms the f-string fix holds and pulls correct per-company sections)
+
+"Compare Infosys vs TCS"
+"Compare Wipro vs HDFC"
+"Compare Reliance vs Infosys"
+"Which is better TCS or Wipro?"
+
+6. Edge cases / robustness
+
+A completely unrelated question: "What is the capital of France?" — see if it gracefully handles a non-financial query at all, or breaks
+A vague query: "Should I invest?" — no company named, see how the planner handles missing context
+A typo: "Infosis revenue growth" — checks if your keyword matching is too strict
+

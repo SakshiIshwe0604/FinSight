@@ -1,27 +1,11 @@
 import yfinance as yf
-import re
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
+from graph.companies import detect_ticker
 
 load_dotenv()
 
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
-
-TICKER_MAP = {
-    "infosys": "INFY.NS", "infy": "INFY.NS",
-    "tcs": "TCS.NS", "tata consultancy": "TCS.NS",
-    "wipro": "WIPRO.NS", "hdfc": "HDFCBANK.NS",
-    "hdfc bank": "HDFCBANK.NS", "reliance": "RELIANCE.NS",
-    "icici": "ICICIBANK.NS", "sbi": "SBIN.NS",
-    "bajaj": "BAJFINANCE.NS", "asian paints": "ASIANPAINT.NS"
-}
-
-def extract_ticker(query: str) -> str:
-    q = query.lower()
-    for name, ticker in TICKER_MAP.items():
-        if name in q:
-            return ticker
-    return "INFY.NS"  # default fallback
 
 def get_stock_data(ticker: str) -> dict:
     try:
@@ -50,7 +34,17 @@ def live_data_node(state: dict) -> dict:
     question = state["sub_tasks"].get("live", state["query"])
     print(f"\n[Live Data] Fetching for: {question}")
 
-    ticker = extract_ticker(state["query"])
+    ticker = detect_ticker(state["query"])
+
+    if ticker is None:
+        answer = (
+            "This company is not in FinSight's tracked universe. "
+            "Currently tracked: Infosys, TCS, Wipro, HDFC Bank, Reliance, "
+            "ICICI Bank, SBI, Bajaj Finance, Asian Paints."
+        )
+        print(f"[Live Data] Ticker not found — returning explicit no-data message")
+        return {**state, "live_answer": answer}
+
     data = get_stock_data(ticker)
 
     if "error" in data:
