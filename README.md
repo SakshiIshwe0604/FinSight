@@ -211,7 +211,7 @@ This is a good illustration of a general failure mode in RAG and agent systems: 
 
 **Sakshi Ishwe**
 B.Tech CSE — Shri Vaishnav Vidyapeeth Vishwavidyalaya, Indore
-[GitHub](https://github.com/SakshiIshwe0604) · [LinkedIn](https://linkedin.com/in/your-linkedin)
+[GitHub](https://github.com/SakshiIshwe0604) · [LinkedIn](https://www.linkedin.com/in/sakshi-ishwe)
 
 ---
 
